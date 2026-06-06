@@ -113,6 +113,8 @@ every invocation, so you can change them at any time):
 | `SKIM_ZSH_BAT` | `bat` | bat binary (some distros ship it as `batcat`). |
 | `SKIM_ZSH_CONTEXT` | `5` | Context lines shown around each match in the content preview. |
 | `SKIM_ZSH_MIN_QUERY` | `3` | Minimum query length before Alt+S runs ripgrep. Prevents full-tree scans — and the lag / disk thrashing they cause — on empty or 1–2 character queries in huge directories. See [Performance in large directories](#performance-in-large-directories). |
+| `SKIM_ZSH_MAX_RESULTS` | `500` | Cap on files listed per Alt+S scan; ripgrep is piped through `head` and quits early once reached, so a common word can't enumerate the whole tree. `0` disables. |
+| `SKIM_ZSH_TIMEOUT` | `5` | Wall-clock seconds each Alt+S scan may run, via `timeout` / `gtimeout` (if installed). Stops slow scans from piling up across keystrokes and churning while idle. `0` disables. |
 | `SKIM_ZSH_PREVIEW_WINDOW` | `right:60%:wrap` | skim `--preview-window` spec. |
 | `SKIM_ZSH_FILE_CMD` | `rg --files --hidden --glob '!**/.git/**'` | Command that lists files for Ctrl+F. |
 | `SKIM_ZSH_GREP_CMD` | `rg --files-with-matches --hidden --smart-case --no-messages --glob '!**/.git/**' --color=never` | ripgrep invocation for Alt+S, **without** the pattern. The query is appended as `-e <query>` at run time — but only once it reaches `SKIM_ZSH_MIN_QUERY` characters. |
@@ -140,8 +142,10 @@ SKIM_ZSH_RG=rga
 `Alt+S` runs ripgrep **live, on every keystroke**. In a directory that isn't
 covered by a `.gitignore` — your `$HOME`, for instance — a 1- or 2-character
 query matches almost everything, so each keystroke kicks off a scan of the
-*entire* tree. That is what makes content search feel slow and thrash the disk.
-Two things keep it fast:
+*entire* tree — and because skim fires one scan per keystroke, those scans pile
+up and keep churning long after you stop typing. That is what makes content
+search feel slow and thrash the disk. Four caps keep it fast — the first bounds
+*how often* a scan starts, the rest bound *how expensive* each one is:
 
 - **Minimum query length.** Ripgrep is not launched until the query reaches
   `SKIM_ZSH_MIN_QUERY` characters (default **3**); empty and 1–2 character
@@ -150,6 +154,20 @@ Two things keep it fast:
   ```zsh
   SKIM_ZSH_MIN_QUERY=4
   ```
+
+- **Result cap** (`SKIM_ZSH_MAX_RESULTS`, default **500**). The result list is
+  piped through `head`, so ripgrep takes a `SIGPIPE` and stops as soon as that
+  many files match. A common word like `the` would otherwise enumerate the whole
+  tree — tens of thousands of files, several seconds of disk thrash — on every
+  keystroke; with the cap it returns near-instantly. Refine with the `content>`
+  and `filter>` prompts rather than scrolling thousands of rows.
+
+- **Per-scan timeout** (`SKIM_ZSH_TIMEOUT`, default **5** seconds). Each scan is
+  wrapped in `timeout` (or `gtimeout` on macOS / Homebrew, when present), so a
+  slow walk over a giant tree is killed instead of piling up across keystrokes —
+  this is what stops the "leave it a while and it keeps lagging" behaviour. Rare
+  or no-match queries, which have to walk the whole tree, are caught here. Set
+  either cap to `0` to disable it.
 
 - **Ignore files.** Ripgrep honours `.gitignore`, `.ignore` and `.rgignore`
   from the current directory upward. Outside a git repo, drop a `~/.ignore`

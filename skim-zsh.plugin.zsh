@@ -22,6 +22,8 @@
 #   SKIM_ZSH_BAT            bat binary                   (default: 'bat')
 #   SKIM_ZSH_CONTEXT        context lines around matches (default: 5)
 #   SKIM_ZSH_MIN_QUERY      min chars before Alt+S greps (default: 3)
+#   SKIM_ZSH_MAX_RESULTS    cap on Alt+S result files    (default: 500, 0=off)
+#   SKIM_ZSH_TIMEOUT        wall-clock cap per scan (s)  (default: 5, 0=off)
 #   SKIM_ZSH_PREVIEW_WINDOW skim --preview-window spec   (default: 'right:60%:wrap')
 #   SKIM_ZSH_FILE_CMD       command that lists files     (default: rg --files ...)
 #   SKIM_ZSH_GREP_CMD       Alt+S grep cmd (no pattern)  (default: rg -l ...)
@@ -49,6 +51,17 @@ typeset -g SKIM_ZSH_CONTEXT="${SKIM_ZSH_CONTEXT:-5}"
 # characters. Protects against full-tree scans on empty / 1–2 char queries,
 # which is what makes Alt+S slow in huge directories like $HOME.
 typeset -g SKIM_ZSH_MIN_QUERY="${SKIM_ZSH_MIN_QUERY:-3}"
+# Stop each live scan after this many matching files: the result list is piped
+# through `head`, so ripgrep takes a SIGPIPE and quits early. A fuzzy list never
+# needs thousands of rows, and this is what stops a common word like "the" from
+# enumerating the *entire* tree (11k+ files, seconds of disk thrash) on every
+# keystroke. 0 disables the cap.
+typeset -g SKIM_ZSH_MAX_RESULTS="${SKIM_ZSH_MAX_RESULTS:-500}"
+# Hard wall-clock cap (seconds) on each live scan, applied with coreutils
+# `timeout` (or `gtimeout` on macOS/Homebrew) when available. Stops a slow scan
+# over a huge tree from piling up across keystrokes and churning after you have
+# stopped typing — the "leave it a while and it lags" case. 0 disables.
+typeset -g SKIM_ZSH_TIMEOUT="${SKIM_ZSH_TIMEOUT:-5}"
 typeset -g SKIM_ZSH_FILE_KEY="${SKIM_ZSH_FILE_KEY:-^F}"
 typeset -g SKIM_ZSH_CONTENT_KEY="${SKIM_ZSH_CONTENT_KEY:-^[s}"
 typeset -g SKIM_ZSH_PREVIEW_WINDOW="${SKIM_ZSH_PREVIEW_WINDOW:-right:60%:wrap}"
@@ -121,7 +134,25 @@ skim-zsh-content-widget() {
   # `_q_glob` is one '?' per required character (e.g. '???' for the default 3),
   # so `case <query> in ???*)` only runs ripgrep when the query is long enough.
   local _q_glob="${(l:SKIM_ZSH_MIN_QUERY::?:)}"
-  local gated_cmd="case {} in ${_q_glob}*) ${SKIM_ZSH_GREP_CMD} -e {} ;; esac"
+
+  # A real query still scans a huge tree, and skim fires one scan per keystroke,
+  # so two more caps keep each one cheap and stop them piling up:
+  #   * `timeout` bounds wall-clock time (no runaway / idle churn / accumulation)
+  #   * `| head -n N` bounds output — ripgrep gets SIGPIPE and quits as soon as
+  #     SKIM_ZSH_MAX_RESULTS files match, so frequent words don't walk the whole
+  #     tree. Rare / no-match queries (which must walk it all) are caught by the
+  #     timeout instead.
+  local _rg="$SKIM_ZSH_GREP_CMD"
+  if (( SKIM_ZSH_TIMEOUT > 0 )); then
+    if (( $+commands[timeout] )); then
+      _rg="timeout ${SKIM_ZSH_TIMEOUT} $_rg"
+    elif (( $+commands[gtimeout] )); then
+      _rg="gtimeout ${SKIM_ZSH_TIMEOUT} $_rg"
+    fi
+  fi
+  local _cap=''
+  (( SKIM_ZSH_MAX_RESULTS > 0 )) && _cap=" | head -n ${SKIM_ZSH_MAX_RESULTS}"
+  local gated_cmd="case {} in ${_q_glob}*) ${_rg} -e {} 2>/dev/null${_cap} ;; esac"
 
   local out
   out=$(
