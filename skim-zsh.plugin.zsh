@@ -37,14 +37,18 @@ typeset -g SKIM_ZSH_DIR="${0:A:h}"
 typeset -g SKIM_ZSH_PREVIEW_HELPER="$SKIM_ZSH_DIR/bin/skim-zsh-content-preview"
 
 # --- defaults (only set if the user hasn't already) -------------------------
-: ${SKIM_ZSH_RG:=rg}
-: ${SKIM_ZSH_BAT:=bat}
-: ${SKIM_ZSH_CONTEXT:=5}
-: ${SKIM_ZSH_FILE_KEY:='^F'}
-: ${SKIM_ZSH_CONTENT_KEY:='^[s'}
-: ${SKIM_ZSH_PREVIEW_WINDOW:='right:60%:wrap'}
-: ${SKIM_ZSH_FILE_CMD:="$SKIM_ZSH_RG --files --hidden --glob '!**/.git/**'"}
-: ${SKIM_ZSH_GREP_TEMPLATE:="$SKIM_ZSH_RG --files-with-matches --hidden --smart-case --glob '!**/.git/**' --color=never -e {}"}
+# Use `typeset -g` rather than `: ${VAR:=default}` so that loaders which source
+# this file from inside a function (e.g. antidote's `antidote-load`) do not emit
+# "scalar parameter created globally" warnings under `setopt warn_create_global`.
+# The `${VAR:-default}` form still honours any value the user set beforehand.
+typeset -g SKIM_ZSH_RG="${SKIM_ZSH_RG:-rg}"
+typeset -g SKIM_ZSH_BAT="${SKIM_ZSH_BAT:-bat}"
+typeset -g SKIM_ZSH_CONTEXT="${SKIM_ZSH_CONTEXT:-5}"
+typeset -g SKIM_ZSH_FILE_KEY="${SKIM_ZSH_FILE_KEY:-^F}"
+typeset -g SKIM_ZSH_CONTENT_KEY="${SKIM_ZSH_CONTENT_KEY:-^[s}"
+typeset -g SKIM_ZSH_PREVIEW_WINDOW="${SKIM_ZSH_PREVIEW_WINDOW:-right:60%:wrap}"
+typeset -g SKIM_ZSH_FILE_CMD="${SKIM_ZSH_FILE_CMD:-$SKIM_ZSH_RG --files --hidden --glob '!**/.git/**'}"
+typeset -g SKIM_ZSH_GREP_TEMPLATE="${SKIM_ZSH_GREP_TEMPLATE:-$SKIM_ZSH_RG --files-with-matches --hidden --smart-case --glob '!**/.git/**' --color=never -e {}}"
 
 # Shared skim key bindings for the preview pane.
 typeset -g _SKIM_ZSH_BINDS='shift-up:preview-up,shift-down:preview-down,alt-up:preview-page-up,alt-down:preview-page-down,alt-w:toggle-preview-wrap'
