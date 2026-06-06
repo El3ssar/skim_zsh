@@ -1,0 +1,11 @@
+# Editor / OS cruft
+*~
+*.swp
+*.swo
+.DS_Store
+.idea/
+.vscode/
+
+# Zsh compiled files
+*.zwc
+*.zwc.old

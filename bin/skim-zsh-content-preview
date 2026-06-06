@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+#
+# skim-zsh-content-preview — preview helper for skim-zsh content search (Alt+S).
+#
+# Usage:
+#   skim-zsh-content-preview <file> <query...>
+#
+# Renders <file> with `bat`, showing only the regions around the matches of
+# <query> (an rg regex). Behaviour:
+#
+#   * every match gets SKIM_ZSH_CONTEXT lines of context above and below it;
+#   * matches whose context windows overlap or touch are merged into a single
+#     region spanning (first match - CONTEXT) .. (last match + CONTEXT);
+#   * separate regions are shown as separate blocks (bat's "snip" separator);
+#   * every matching line is highlighted.
+#
+# Environment overrides (exported by the plugin):
+#   SKIM_ZSH_BAT       bat binary       (default: bat)
+#   SKIM_ZSH_RG        ripgrep binary   (default: rg)
+#   SKIM_ZSH_CONTEXT   context lines    (default: 5)
+
+set -o pipefail 2>/dev/null || true
+
+file=$1
+shift 2>/dev/null || true
+query=$*
+
+bat_bin=${SKIM_ZSH_BAT:-bat}
+rg_bin=${SKIM_ZSH_RG:-rg}
+ctx=${SKIM_ZSH_CONTEXT:-5}
+
+bat_base=(
+  "$bat_bin"
+  --color=always
+  --decorations=always
+  --paging=never
+  --style=numbers,snip
+)
+
+# Show the top of the file (fallback for "no query yet" / "no rg match").
+show_head() {
+  exec "${bat_base[@]}" --line-range ":$((ctx * 40))" -- "$file"
+}
+
+[ -n "$file" ] || exit 0
+[ -f "$file" ] || exit 0
+[ -n "$query" ] || show_head
+
+# Total number of lines, used to clamp the trailing context window.
+# awk's NR counts a final line that lacks a trailing newline (wc -l does not).
+total=$(awk 'END{print NR}' "$file" 2>/dev/null)
+[ -n "$total" ] || total=1
+[ "$total" -ge 1 ] || total=1
+
+range_args=()
+hl_args=()
+cluster_lo=""
+cluster_hi=""
+
+flush_cluster() {
+  local lo=$((cluster_lo - ctx))
+  local hi=$((cluster_hi + ctx))
+  [ "$lo" -ge 1 ] || lo=1
+  [ "$hi" -le "$total" ] || hi=$total
+  range_args+=(--line-range "${lo}:${hi}")
+}
+
+# Collect 1-based line numbers of every match, in ascending order, and fold
+# them into contiguous regions on the fly.  Process substitution keeps the
+# loop in the current shell so the arrays survive.
+while IFS= read -r lineno; do
+  [ -n "$lineno" ] || continue
+  hl_args+=(--highlight-line "$lineno")
+  if [ -z "$cluster_lo" ]; then
+    cluster_lo=$lineno
+    cluster_hi=$lineno
+  elif [ "$((lineno - cluster_hi))" -le "$((2 * ctx + 1))" ]; then
+    cluster_hi=$lineno
+  else
+    flush_cluster
+    cluster_lo=$lineno
+    cluster_hi=$lineno
+  fi
+done < <(
+  "$rg_bin" --line-number --no-filename --no-heading --color=never \
+            --smart-case -e "$query" -- "$file" 2>/dev/null | cut -d: -f1
+)
+
+# rg's regex/smart-case can differ from skim's fuzzy filter; if nothing
+# matched here, just show the head rather than an empty preview.
+[ -n "$cluster_lo" ] || show_head
+
+flush_cluster
+
+exec "${bat_base[@]}" "${range_args[@]}" "${hl_args[@]}" -- "$file"
