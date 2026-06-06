@@ -65,11 +65,11 @@ typeset -g SKIM_ZSH_TIMEOUT="${SKIM_ZSH_TIMEOUT:-5}"
 typeset -g SKIM_ZSH_FILE_KEY="${SKIM_ZSH_FILE_KEY:-^F}"
 typeset -g SKIM_ZSH_CONTENT_KEY="${SKIM_ZSH_CONTENT_KEY:-^[s}"
 typeset -g SKIM_ZSH_PREVIEW_WINDOW="${SKIM_ZSH_PREVIEW_WINDOW:-right:60%:wrap}"
-typeset -g SKIM_ZSH_FILE_CMD="${SKIM_ZSH_FILE_CMD:-$SKIM_ZSH_RG --files --hidden --glob '!**/.git/**'}"
+typeset -g SKIM_ZSH_FILE_CMD="${SKIM_ZSH_FILE_CMD:-$SKIM_ZSH_RG --files -uuu --glob '!**/.git/**'}"
 # Content search: the ripgrep invocation WITHOUT the pattern. The query is
 # appended as `-e <query>` at run time (only once it reaches SKIM_ZSH_MIN_QUERY
 # characters). `--no-messages` keeps unreadable-file errors out of the list.
-typeset -g SKIM_ZSH_GREP_CMD="${SKIM_ZSH_GREP_CMD:-$SKIM_ZSH_RG --files-with-matches --hidden --smart-case --no-messages --glob '!**/.git/**' --color=never}"
+typeset -g SKIM_ZSH_GREP_CMD="${SKIM_ZSH_GREP_CMD:-$SKIM_ZSH_RG --files-with-matches --hidden --no-ignore --smart-case --no-messages --glob '!**/.git/**' --color=never}"
 
 # Shared skim key bindings for the preview pane.
 typeset -g _SKIM_ZSH_BINDS='shift-up:preview-up,shift-down:preview-down,alt-up:preview-page-up,alt-down:preview-page-down,alt-w:toggle-preview-wrap'
