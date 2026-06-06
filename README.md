@@ -95,8 +95,10 @@ echo 'source ~/.zsh/skim-zsh/skim-zsh.plugin.zsh' >> ~/.zshrc
 | <kbd>Alt</kbd>+<kbd>W</kbd> | Toggle line wrap in the preview |
 | <kbd>Esc</kbd> / <kbd>Ctrl</kbd>+<kbd>C</kbd> | Cancel |
 
-For content search, the top prompt (`content>`) drives `ripgrep`; whatever you
-type is the search pattern (smart-case, regex).
+For content search, the top prompt (`content (≥3)>`) drives `ripgrep`; whatever
+you type is the search pattern (smart-case, regex). Ripgrep isn't launched until
+the query reaches `SKIM_ZSH_MIN_QUERY` characters (default 3) — see
+[Performance in large directories](#performance-in-large-directories).
 
 ## Configuration
 
@@ -110,9 +112,10 @@ every invocation, so you can change them at any time):
 | `SKIM_ZSH_RG` | `rg` | ripgrep binary — set to `rga` to search inside documents. |
 | `SKIM_ZSH_BAT` | `bat` | bat binary (some distros ship it as `batcat`). |
 | `SKIM_ZSH_CONTEXT` | `5` | Context lines shown around each match in the content preview. |
+| `SKIM_ZSH_MIN_QUERY` | `3` | Minimum query length before Alt+S runs ripgrep. Prevents full-tree scans — and the lag / disk thrashing they cause — on empty or 1–2 character queries in huge directories. See [Performance in large directories](#performance-in-large-directories). |
 | `SKIM_ZSH_PREVIEW_WINDOW` | `right:60%:wrap` | skim `--preview-window` spec. |
 | `SKIM_ZSH_FILE_CMD` | `rg --files --hidden --glob '!**/.git/**'` | Command that lists files for Ctrl+F. |
-| `SKIM_ZSH_GREP_TEMPLATE` | `rg --files-with-matches --hidden --smart-case --glob '!**/.git/**' --color=never -e {}` | Interactive grep command for Alt+S; `{}` is replaced by the query. |
+| `SKIM_ZSH_GREP_CMD` | `rg --files-with-matches --hidden --smart-case --no-messages --glob '!**/.git/**' --color=never` | ripgrep invocation for Alt+S, **without** the pattern. The query is appended as `-e <query>` at run time — but only once it reaches `SKIM_ZSH_MIN_QUERY` characters. |
 
 ### Examples
 
@@ -131,6 +134,38 @@ SKIM_ZSH_CONTENT_KEY='^G'
 # Search inside PDFs / docx with ripgrep-all
 SKIM_ZSH_RG=rga
 ```
+
+## Performance in large directories
+
+`Alt+S` runs ripgrep **live, on every keystroke**. In a directory that isn't
+covered by a `.gitignore` — your `$HOME`, for instance — a 1- or 2-character
+query matches almost everything, so each keystroke kicks off a scan of the
+*entire* tree. That is what makes content search feel slow and thrash the disk.
+Two things keep it fast:
+
+- **Minimum query length.** Ripgrep is not launched until the query reaches
+  `SKIM_ZSH_MIN_QUERY` characters (default **3**); empty and 1–2 character
+  queries do no work at all. Raise it in very large trees:
+
+  ```zsh
+  SKIM_ZSH_MIN_QUERY=4
+  ```
+
+- **Ignore files.** Ripgrep honours `.gitignore`, `.ignore` and `.rgignore`
+  from the current directory upward. Outside a git repo, drop a `~/.ignore`
+  listing the big, uninteresting trees so they stay out of every search:
+
+  ```
+  # ~/.ignore — skipped everywhere ripgrep runs
+  node_modules/
+  .cache/
+  .local/
+  .cargo/
+  *.iso
+  ```
+
+`Ctrl+F` (file-name search) lists files once and filters them in memory, so it
+stays responsive regardless of directory size — these notes are about `Alt+S`.
 
 ## Notes
 

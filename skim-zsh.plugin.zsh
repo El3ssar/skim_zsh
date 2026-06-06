@@ -21,9 +21,10 @@
 #   SKIM_ZSH_RG             ripgrep binary               (default: 'rg', try 'rga')
 #   SKIM_ZSH_BAT            bat binary                   (default: 'bat')
 #   SKIM_ZSH_CONTEXT        context lines around matches (default: 5)
+#   SKIM_ZSH_MIN_QUERY      min chars before Alt+S greps (default: 3)
 #   SKIM_ZSH_PREVIEW_WINDOW skim --preview-window spec   (default: 'right:60%:wrap')
 #   SKIM_ZSH_FILE_CMD       command that lists files     (default: rg --files ...)
-#   SKIM_ZSH_GREP_TEMPLATE  interactive grep cmd, {}=query(default: rg -l ...)
+#   SKIM_ZSH_GREP_CMD       Alt+S grep cmd (no pattern)  (default: rg -l ...)
 #
 # Inside skim:
 #   Tab / Shift-Tab  select multiple        Enter   accept
@@ -44,11 +45,18 @@ typeset -g SKIM_ZSH_PREVIEW_HELPER="$SKIM_ZSH_DIR/bin/skim-zsh-content-preview"
 typeset -g SKIM_ZSH_RG="${SKIM_ZSH_RG:-rg}"
 typeset -g SKIM_ZSH_BAT="${SKIM_ZSH_BAT:-bat}"
 typeset -g SKIM_ZSH_CONTEXT="${SKIM_ZSH_CONTEXT:-5}"
+# Don't run the live content search until the query is at least this many
+# characters. Protects against full-tree scans on empty / 1–2 char queries,
+# which is what makes Alt+S slow in huge directories like $HOME.
+typeset -g SKIM_ZSH_MIN_QUERY="${SKIM_ZSH_MIN_QUERY:-3}"
 typeset -g SKIM_ZSH_FILE_KEY="${SKIM_ZSH_FILE_KEY:-^F}"
 typeset -g SKIM_ZSH_CONTENT_KEY="${SKIM_ZSH_CONTENT_KEY:-^[s}"
 typeset -g SKIM_ZSH_PREVIEW_WINDOW="${SKIM_ZSH_PREVIEW_WINDOW:-right:60%:wrap}"
 typeset -g SKIM_ZSH_FILE_CMD="${SKIM_ZSH_FILE_CMD:-$SKIM_ZSH_RG --files --hidden --glob '!**/.git/**'}"
-typeset -g SKIM_ZSH_GREP_TEMPLATE="${SKIM_ZSH_GREP_TEMPLATE:-$SKIM_ZSH_RG --files-with-matches --hidden --smart-case --glob '!**/.git/**' --color=never -e {}}"
+# Content search: the ripgrep invocation WITHOUT the pattern. The query is
+# appended as `-e <query>` at run time (only once it reaches SKIM_ZSH_MIN_QUERY
+# characters). `--no-messages` keeps unreadable-file errors out of the list.
+typeset -g SKIM_ZSH_GREP_CMD="${SKIM_ZSH_GREP_CMD:-$SKIM_ZSH_RG --files-with-matches --hidden --smart-case --no-messages --glob '!**/.git/**' --color=never}"
 
 # Shared skim key bindings for the preview pane.
 typeset -g _SKIM_ZSH_BINDS='shift-up:preview-up,shift-down:preview-down,alt-up:preview-page-up,alt-down:preview-page-down,alt-w:toggle-preview-wrap'
@@ -104,6 +112,17 @@ skim-zsh-content-widget() {
   # Helper path is single-quoted so a plugin dir containing spaces still works.
   local preview="'${SKIM_ZSH_PREVIEW_HELPER}' {} {cq}"
 
+  # Length-gate the live search: ripgrep only runs once the query reaches
+  # SKIM_ZSH_MIN_QUERY characters. Empty / 1–2 char queries otherwise match
+  # almost everything, so skim re-scans the whole tree on every keystroke —
+  # exactly what makes Alt+S crawl and thrash the disk in huge dirs like $HOME.
+  # `{}` is skim's command-query placeholder; it is substituted as a quoted
+  # string, so the `case` word is always one safe token (handles spaces, etc.).
+  # `_q_glob` is one '?' per required character (e.g. '???' for the default 3),
+  # so `case <query> in ???*)` only runs ripgrep when the query is long enough.
+  local _q_glob="${(l:SKIM_ZSH_MIN_QUERY::?:)}"
+  local gated_cmd="case {} in ${_q_glob}*) ${SKIM_ZSH_GREP_CMD} -e {} ;; esac"
+
   local out
   out=$(
     SKIM_ZSH_BAT="$SKIM_ZSH_BAT" \
@@ -111,8 +130,8 @@ skim-zsh-content-widget() {
     SKIM_ZSH_CONTEXT="$SKIM_ZSH_CONTEXT" \
     sk \
       --interactive \
-      --cmd="$SKIM_ZSH_GREP_TEMPLATE" \
-      --cmd-prompt='content> ' \
+      --cmd="$gated_cmd" \
+      --cmd-prompt="content (≥${SKIM_ZSH_MIN_QUERY})> " \
       --prompt='filter> ' \
       --multi \
       --reverse \
