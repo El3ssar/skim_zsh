@@ -6,6 +6,8 @@ toolchain — [`skim`](https://github.com/skim-rs/skim) (`sk`),
 [`bat`](https://github.com/sharkdp/bat) — the speedy replacements for
 `fzf` / `grep` / `cat`.
 
+![Demo](demo.gif)
+
 | Key | What it does |
 | --- | --- |
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> | Fuzzy-find files **by name** in the current directory, with a `bat` preview in the right pane. |
