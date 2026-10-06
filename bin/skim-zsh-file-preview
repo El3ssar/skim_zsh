@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#
+# skim-zsh-file-preview — preview helper for skim-zsh file search (Ctrl+F).
+#
+# Usage:
+#   skim-zsh-file-preview <path>
+#
+#   directory      -> eza (or ls) listing
+#   image / pdf    -> mcat half-blocks (pdfs show their first page)
+#   anything else  -> bat (bat itself reports binary files)
+#
+# Environment overrides (exported by the plugin):
+#   SKIM_ZSH_BAT    bat binary   (default: bat)
+#   SKIM_ZSH_MCAT   mcat binary  (default: mcat)
+
+file=$1
+bat_bin=${SKIM_ZSH_BAT:-bat}
+mcat_bin=${SKIM_ZSH_MCAT:-mcat}
+
+[ -e "$file" ] || exit 0
+
+if [ -d "$file" ]; then
+  if command -v eza >/dev/null 2>&1; then
+    exec eza -1 --icons=always --color=always --group-directories-first -- "$file"
+  fi
+  exec ls -1 "$file"
+fi
+
+shopt -s nocasematch
+case $file in
+  *.png|*.jpg|*.jpeg|*.gif|*.webp|*.bmp|*.tif|*.tiff|*.svg|*.ico|*.avif|*.heic|*.pdf)
+    if command -v "$mcat_bin" >/dev/null 2>&1; then
+      # skim sets COLUMNS/LINES to the preview pane size. Unicode half-blocks
+      # (plain coloured text) are forced, because skim's preview pane can't
+      # display kitty/sixel graphics. Ctrl-O opens the sharp version.
+      size="${FZF_PREVIEW_COLUMNS:-${COLUMNS:-80}}x${FZF_PREVIEW_LINES:-${LINES:-24}}"
+      exec env -u KITTY_WINDOW_ID -u TERM_PROGRAM TERM=xterm-256color \
+        "$mcat_bin" -i --no-center --sc "$size" --img-width 100% --img-height 100% -- "$file"
+    fi
+    ;;
+esac
+
+exec "$bat_bin" --color=always --decorations=always --style=numbers --paging=never -- "$file"

@@ -5,9 +5,11 @@
 #                                        /___/
 # skim-zsh — fast file & content search for the command line.
 #
-#   Ctrl+F : fuzzy-find files by *name* in $PWD, preview with bat.
+#   Ctrl+F : fuzzy-find files by *name* in $PWD. Preview: bat for text,
+#            mcat for images and PDFs, eza for directories.
 #   Alt+S  : live-grep file *contents* in $PWD, preview the matching
 #            regions with bat (context + highlighted match lines).
+#   Ctrl+R : fuzzy-search shell history.
 #
 # Built on skim (sk) + ripgrep (rg) + bat — the fast Rust replacements for
 # fzf / grep / cat. On selection, the chosen path(s) are inserted (quoted)
@@ -18,8 +20,10 @@
 #
 #   SKIM_ZSH_FILE_KEY       key for file search          (default: '^F'   = Ctrl+F)
 #   SKIM_ZSH_CONTENT_KEY    key for content search       (default: '^[s'  = Alt+S)
+#   SKIM_ZSH_HISTORY_KEY    key for history search       (default: '^R'   = Ctrl+R, '' = off)
 #   SKIM_ZSH_RG             ripgrep binary               (default: 'rg', try 'rga')
-#   SKIM_ZSH_BAT            bat binary                   (default: 'bat')
+#   SKIM_ZSH_BAT            bat binary                   (default: 'bat', else 'batcat')
+#   SKIM_ZSH_MCAT           mcat binary (image/pdf preview) (default: 'mcat')
 #   SKIM_ZSH_CONTEXT        context lines around matches (default: 5)
 #   SKIM_ZSH_MIN_QUERY      min chars before Alt+S greps (default: 3)
 #   SKIM_ZSH_MAX_RESULTS    cap on Alt+S result files    (default: 500, 0=off)
@@ -32,12 +36,16 @@
 #   Tab / Shift-Tab  select multiple        Enter   accept
 #   Shift-Up/Down    scroll preview a line  Alt-Up/Down  scroll preview a page
 #   Alt-W            toggle preview wrap    Esc / Ctrl-C cancel
+#   Ctrl-O           open the highlighted file full screen: meowpdf for PDFs
+#                    (kitty), mcat for images, $EDITOR for everything else
 
 # --- resolve this file's own directory (Zsh Plugin Standard idiom) ----------
 0="${ZERO:-${${0:#$ZSH_ARGZERO}:-${(%):-%N}}}"
 0="${${(M)0:#/*}:-$PWD/$0}"
 typeset -g SKIM_ZSH_DIR="${0:A:h}"
 typeset -g SKIM_ZSH_PREVIEW_HELPER="$SKIM_ZSH_DIR/bin/skim-zsh-content-preview"
+typeset -g SKIM_ZSH_FILE_PREVIEW_HELPER="$SKIM_ZSH_DIR/bin/skim-zsh-file-preview"
+typeset -g SKIM_ZSH_OPEN_HELPER="$SKIM_ZSH_DIR/bin/skim-zsh-open"
 
 # --- defaults (only set if the user hasn't already) -------------------------
 # Use `typeset -g` rather than `: ${VAR:=default}` so that loaders which source
@@ -45,7 +53,13 @@ typeset -g SKIM_ZSH_PREVIEW_HELPER="$SKIM_ZSH_DIR/bin/skim-zsh-content-preview"
 # "scalar parameter created globally" warnings under `setopt warn_create_global`.
 # The `${VAR:-default}` form still honours any value the user set beforehand.
 typeset -g SKIM_ZSH_RG="${SKIM_ZSH_RG:-rg}"
-typeset -g SKIM_ZSH_BAT="${SKIM_ZSH_BAT:-bat}"
+# Debian/Ubuntu ship bat as `batcat`.
+if (( ! $+commands[bat] && $+commands[batcat] )); then
+  typeset -g SKIM_ZSH_BAT="${SKIM_ZSH_BAT:-batcat}"
+else
+  typeset -g SKIM_ZSH_BAT="${SKIM_ZSH_BAT:-bat}"
+fi
+typeset -g SKIM_ZSH_MCAT="${SKIM_ZSH_MCAT:-mcat}"
 typeset -g SKIM_ZSH_CONTEXT="${SKIM_ZSH_CONTEXT:-5}"
 # Don't run the live content search until the query is at least this many
 # characters. Protects against full-tree scans on empty / 1–2 char queries,
@@ -64,6 +78,7 @@ typeset -g SKIM_ZSH_MAX_RESULTS="${SKIM_ZSH_MAX_RESULTS:-500}"
 typeset -g SKIM_ZSH_TIMEOUT="${SKIM_ZSH_TIMEOUT:-5}"
 typeset -g SKIM_ZSH_FILE_KEY="${SKIM_ZSH_FILE_KEY:-^F}"
 typeset -g SKIM_ZSH_CONTENT_KEY="${SKIM_ZSH_CONTENT_KEY:-^[s}"
+typeset -g SKIM_ZSH_HISTORY_KEY="${SKIM_ZSH_HISTORY_KEY-^R}"
 typeset -g SKIM_ZSH_PREVIEW_WINDOW="${SKIM_ZSH_PREVIEW_WINDOW:-right:60%:wrap}"
 typeset -g SKIM_ZSH_FILE_CMD="${SKIM_ZSH_FILE_CMD:-$SKIM_ZSH_RG --files -uuu --glob '!**/.git/**'}"
 # Content search: the ripgrep invocation WITHOUT the pattern. The query is
@@ -73,6 +88,8 @@ typeset -g SKIM_ZSH_GREP_CMD="${SKIM_ZSH_GREP_CMD:-$SKIM_ZSH_RG --files-with-mat
 
 # Shared skim key bindings for the preview pane.
 typeset -g _SKIM_ZSH_BINDS='shift-up:preview-up,shift-down:preview-down,alt-up:preview-page-up,alt-down:preview-page-down,alt-w:toggle-preview-wrap'
+# Ctrl-O opens the highlighted file full screen, then returns to skim.
+typeset -g _SKIM_ZSH_OPEN_BIND="ctrl-o:execute('${SKIM_ZSH_OPEN_HELPER}' {})"
 
 # Verify the toolchain; emit a friendly message into the ZLE area if missing.
 _skim-zsh-check-tools() {
@@ -94,17 +111,22 @@ skim-zsh-file-widget() {
   setopt local_options no_aliases pipe_fail
   _skim-zsh-check-tools || { zle reset-prompt; return 1; }
 
-  local preview="$SKIM_ZSH_BAT --color=always --decorations=always --style=numbers -- {}"
+  # Helper path is single-quoted so a plugin dir containing spaces still works.
+  local preview="'${SKIM_ZSH_FILE_PREVIEW_HELPER}' {}"
 
   local out
   out=$(
-    eval "$SKIM_ZSH_FILE_CMD" 2>/dev/null | sk \
+    eval "$SKIM_ZSH_FILE_CMD" 2>/dev/null | \
+    SKIM_ZSH_BAT="$SKIM_ZSH_BAT" \
+    SKIM_ZSH_MCAT="$SKIM_ZSH_MCAT" \
+    sk \
       --multi \
       --reverse \
       --prompt='files> ' \
       --preview="$preview" \
       --preview-window="$SKIM_ZSH_PREVIEW_WINDOW" \
-      --bind="$_SKIM_ZSH_BINDS"
+      --bind="$_SKIM_ZSH_BINDS" \
+      --bind="$_SKIM_ZSH_OPEN_BIND"
   )
 
   if [[ -n $out ]]; then
@@ -129,7 +151,7 @@ skim-zsh-content-widget() {
   # SKIM_ZSH_MIN_QUERY characters. Empty / 1–2 char queries otherwise match
   # almost everything, so skim re-scans the whole tree on every keystroke —
   # exactly what makes Alt+S crawl and thrash the disk in huge dirs like $HOME.
-  # `{}` is skim's command-query placeholder; it is substituted as a quoted
+  # `{cq}` is skim's command-query placeholder (`{}` is the current line); it is substituted as a quoted
   # string, so the `case` word is always one safe token (handles spaces, etc.).
   # `_q_glob` is one '?' per required character (e.g. '???' for the default 3),
   # so `case <query> in ???*)` only runs ripgrep when the query is long enough.
@@ -152,7 +174,7 @@ skim-zsh-content-widget() {
   fi
   local _cap=''
   (( SKIM_ZSH_MAX_RESULTS > 0 )) && _cap=" | head -n ${SKIM_ZSH_MAX_RESULTS}"
-  local gated_cmd="case {} in ${_q_glob}*) ${_rg} -e {} 2>/dev/null${_cap} ;; esac"
+  local gated_cmd="case {cq} in ${_q_glob}*) ${_rg} -e {cq} 2>/dev/null${_cap} ;; esac"
 
   local out
   out=$(
@@ -168,7 +190,8 @@ skim-zsh-content-widget() {
       --reverse \
       --preview="$preview" \
       --preview-window="$SKIM_ZSH_PREVIEW_WINDOW" \
-      --bind="$_SKIM_ZSH_BINDS"
+      --bind="$_SKIM_ZSH_BINDS" \
+      --bind="$_SKIM_ZSH_OPEN_BIND"
   )
 
   if [[ -n $out ]]; then
@@ -180,10 +203,46 @@ skim-zsh-content-widget() {
   zle reset-prompt
 }
 
+# --- Ctrl+R : search shell history ------------------------------------------
+skim-zsh-history-widget() {
+  emulate -L zsh
+  setopt local_options no_aliases pipe_fail
+  if ! command -v sk >/dev/null 2>&1; then
+    zle -M "skim-zsh: missing dependency: sk (skim)"
+    return 1
+  fi
+
+  # NUL-separated "<event number>\t<command>", newest first, so multi-line
+  # commands survive. Only the command is shown and searched.
+  local out
+  out=$(
+    local n
+    for n in ${(Onk)history}; do
+      print -rn -- "${n}"$'\t'"${history[$n]}"$'\0'
+    done | sk \
+      --read0 \
+      --delimiter=$'\t' \
+      --with-nth=2.. \
+      --scheme=history \
+      --reverse \
+      --prompt='history> ' \
+      --query="$LBUFFER"
+  )
+
+  if [[ -n $out ]]; then
+    zle vi-fetch-history -n "${out%%$'\t'*}"
+  fi
+  zle reset-prompt
+}
+
 # --- register widgets & bind keys (interactive shells only) -----------------
 if [[ -o interactive ]]; then
   zle -N skim-zsh-file-widget
   zle -N skim-zsh-content-widget
   bindkey "$SKIM_ZSH_FILE_KEY" skim-zsh-file-widget
   bindkey "$SKIM_ZSH_CONTENT_KEY" skim-zsh-content-widget
+  if [[ -n $SKIM_ZSH_HISTORY_KEY ]]; then
+    zle -N skim-zsh-history-widget
+    bindkey "$SKIM_ZSH_HISTORY_KEY" skim-zsh-history-widget
+  fi
 fi

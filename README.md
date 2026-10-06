@@ -12,6 +12,15 @@ toolchain — [`skim`](https://github.com/skim-rs/skim) (`sk`),
 | --- | --- |
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> | Fuzzy-find files **by name** in the current directory, with a `bat` preview in the right pane. |
 | <kbd>Alt</kbd>+<kbd>S</kbd> | Live-grep file **contents** in the current directory; the preview shows the matching regions of the file with the matched lines highlighted. |
+| <kbd>Ctrl</kbd>+<kbd>R</kbd> | Fuzzy-search **shell history** (multi-line commands included). |
+
+Previews: `bat` for text, [`mcat`](https://github.com/Skardyy/mcat) for
+images and PDFs (first page), `eza` for directories. Inside the file or
+content search, <kbd>Ctrl</kbd>+<kbd>O</kbd> opens the highlighted file full
+screen: `meowpdf` for PDFs (kitty), `mcat` for images, `$EDITOR` for the rest.
+
+> **macOS:** <kbd>Alt</kbd> is <kbd>Option</kbd>. In kitty set
+> `macos_option_as_alt left` so it reaches the shell.
 
 On <kbd>Enter</kbd>, the selected path(s) are inserted (shell-quoted) at the
 cursor, so you can drop them straight into `nvim`, `cat`, `cp`, a pipeline, etc.
@@ -42,6 +51,8 @@ All three are available via `cargo install` or your package manager:
 - `sk`  — skim   (`cargo install skim`)
 - `rg`  — ripgrep (`cargo install ripgrep`)
 - `bat` — bat     (`cargo install bat`)
+- *(optional)* `mcat` — image/PDF previews (`cargo install mcat`)
+- *(optional)* `meowpdf` — full screen PDF viewer for <kbd>Ctrl</kbd>+<kbd>O</kbd> in kitty
 - *(optional)* `rga` — [ripgrep-all](https://github.com/phiresky/ripgrep-all),
   if you want content search to look inside PDFs / office docs (see
   [Configuration](#configuration); previews of converted formats are
@@ -111,8 +122,10 @@ every invocation, so you can change them at any time):
 | --- | --- | --- |
 | `SKIM_ZSH_FILE_KEY` | `^F` | Keybinding for file search. |
 | `SKIM_ZSH_CONTENT_KEY` | `^[s` (Alt+S) | Keybinding for content search. |
+| `SKIM_ZSH_HISTORY_KEY` | `^R` | Keybinding for history search. Empty disables it. |
 | `SKIM_ZSH_RG` | `rg` | ripgrep binary — set to `rga` to search inside documents. |
-| `SKIM_ZSH_BAT` | `bat` | bat binary (some distros ship it as `batcat`). |
+| `SKIM_ZSH_BAT` | `bat`, else `batcat` | bat binary. |
+| `SKIM_ZSH_MCAT` | `mcat` | mcat binary for image / PDF previews. |
 | `SKIM_ZSH_CONTEXT` | `5` | Context lines shown around each match in the content preview. |
 | `SKIM_ZSH_MIN_QUERY` | `3` | Minimum query length before Alt+S runs ripgrep. Prevents full-tree scans — and the lag / disk thrashing they cause — on empty or 1–2 character queries in huge directories. See [Performance in large directories](#performance-in-large-directories). |
 | `SKIM_ZSH_MAX_RESULTS` | `500` | Cap on files listed per Alt+S scan; ripgrep is piped through `head` and quits early once reached, so a common word can't enumerate the whole tree. `0` disables. |
