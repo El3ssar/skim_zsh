@@ -15,9 +15,7 @@ toolchain — [`skim`](https://github.com/skim-rs/skim) (`sk`),
 | <kbd>Ctrl</kbd>+<kbd>R</kbd> | Fuzzy-search **shell history** (multi-line commands included). |
 
 Previews: `bat` for text, [`mcat`](https://github.com/Skardyy/mcat) for
-images and PDFs (first page), `eza` for directories. Inside the file or
-content search, <kbd>Ctrl</kbd>+<kbd>O</kbd> opens the highlighted file full
-screen: `meowpdf` for PDFs (kitty), `mcat` for images, `$EDITOR` for the rest.
+images and PDFs (first page), `eza` for directories.
 
 > **macOS:** <kbd>Alt</kbd> is <kbd>Option</kbd>. In kitty set
 > `macos_option_as_alt left` so it reaches the shell.
@@ -52,7 +50,6 @@ All three are available via `cargo install` or your package manager:
 - `rg`  — ripgrep (`cargo install ripgrep`)
 - `bat` — bat     (`cargo install bat`)
 - *(optional)* `mcat` — image/PDF previews (`cargo install mcat`)
-- *(optional)* `meowpdf` — full screen PDF viewer for <kbd>Ctrl</kbd>+<kbd>O</kbd> in kitty
 - *(optional)* `rga` — [ripgrep-all](https://github.com/phiresky/ripgrep-all),
   if you want content search to look inside PDFs / office docs (see
   [Configuration](#configuration); previews of converted formats are

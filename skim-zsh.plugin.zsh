@@ -36,8 +36,6 @@
 #   Tab / Shift-Tab  select multiple        Enter   accept
 #   Shift-Up/Down    scroll preview a line  Alt-Up/Down  scroll preview a page
 #   Alt-W            toggle preview wrap    Esc / Ctrl-C cancel
-#   Ctrl-O           open the highlighted file full screen: meowpdf for PDFs
-#                    (kitty), mcat for images, $EDITOR for everything else
 
 # --- resolve this file's own directory (Zsh Plugin Standard idiom) ----------
 0="${ZERO:-${${0:#$ZSH_ARGZERO}:-${(%):-%N}}}"
@@ -45,7 +43,6 @@
 typeset -g SKIM_ZSH_DIR="${0:A:h}"
 typeset -g SKIM_ZSH_PREVIEW_HELPER="$SKIM_ZSH_DIR/bin/skim-zsh-content-preview"
 typeset -g SKIM_ZSH_FILE_PREVIEW_HELPER="$SKIM_ZSH_DIR/bin/skim-zsh-file-preview"
-typeset -g SKIM_ZSH_OPEN_HELPER="$SKIM_ZSH_DIR/bin/skim-zsh-open"
 
 # --- defaults (only set if the user hasn't already) -------------------------
 # Use `typeset -g` rather than `: ${VAR:=default}` so that loaders which source
@@ -88,8 +85,6 @@ typeset -g SKIM_ZSH_GREP_CMD="${SKIM_ZSH_GREP_CMD:-$SKIM_ZSH_RG --files-with-mat
 
 # Shared skim key bindings for the preview pane.
 typeset -g _SKIM_ZSH_BINDS='shift-up:preview-up,shift-down:preview-down,alt-up:preview-page-up,alt-down:preview-page-down,alt-w:toggle-preview-wrap'
-# Ctrl-O opens the highlighted file full screen, then returns to skim.
-typeset -g _SKIM_ZSH_OPEN_BIND="ctrl-o:execute('${SKIM_ZSH_OPEN_HELPER}' {})"
 
 # Verify the toolchain; emit a friendly message into the ZLE area if missing.
 _skim-zsh-check-tools() {
@@ -125,8 +120,7 @@ skim-zsh-file-widget() {
       --prompt='files> ' \
       --preview="$preview" \
       --preview-window="$SKIM_ZSH_PREVIEW_WINDOW" \
-      --bind="$_SKIM_ZSH_BINDS" \
-      --bind="$_SKIM_ZSH_OPEN_BIND"
+      --bind="$_SKIM_ZSH_BINDS"
   )
 
   if [[ -n $out ]]; then
@@ -190,8 +184,7 @@ skim-zsh-content-widget() {
       --reverse \
       --preview="$preview" \
       --preview-window="$SKIM_ZSH_PREVIEW_WINDOW" \
-      --bind="$_SKIM_ZSH_BINDS" \
-      --bind="$_SKIM_ZSH_OPEN_BIND"
+      --bind="$_SKIM_ZSH_BINDS"
   )
 
   if [[ -n $out ]]; then
